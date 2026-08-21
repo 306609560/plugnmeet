@@ -1,0 +1,294 @@
+name: Desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate application
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+  package:
+    name: Package ${{ matrix.name }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-2025
+            script: dist:win:x64
+            artifact: windows-x64
+          - name: macOS Intel
+            runner: macos-15-intel
+            script: dist:mac:x64
+            artifact: macos-x64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            script: dist:mac:arm64
+            artifact: macos-arm64
+          - name: Linux x64
+            runner: ubuntu-24.04
+            script: dist:linux:x64
+            artifact: linux-x64
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            script: dist:linux:arm64
+            artifact: linux-arm64
+ 
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libopenjp2-tools rpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build unsigned installers
+        run: pnpm run ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: uniccmeet-${{ matrix.artifact }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.blockmap
+            release/*.yml
+
+  bundle:
+    name: Bundle update downloads
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Read package version
+        id: package_version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download platform packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: uniccmeet-*
+          path: artifacts
+
+      - name: Arrange update directory
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.package_version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          version="$APP_VERSION"
+          update_root="artifact-root/downloads/updates"
+
+          echo "Downloaded platform files:"
+          find artifacts -type f | sort
+
+          copy_platform() {
+            local artifact_name="$1"
+            local destination="$2"
+
+            mkdir -p "$destination"
+            find "artifacts/$artifact_name" -maxdepth 1 -type f \( \
+              -name 'latest*.yml' -o \
+              -name '*.exe' -o \
+              -name '*.dmg' -o \
+              -name '*.zip' -o \
+              -name '*.AppImage' -o \
+              -name '*.deb' -o \
+              -name '*.rpm' -o \
+              -name '*.blockmap' \
+            \) \
+              -exec cp "{}" "$destination/" \;
+          }
+
+          copy_platform \
+            "uniccmeet-windows-x64" \
+            "$update_root/win32/x64"
+          copy_platform \
+            "uniccmeet-macos-x64" \
+            "$update_root/darwin/x64"
+          copy_platform \
+            "uniccmeet-macos-arm64" \
+            "$update_root/darwin/arm64"
+          copy_platform \
+            "uniccmeet-linux-x64" \
+            "$update_root/linux/x64"
+          copy_platform \
+            "uniccmeet-linux-arm64" \
+            "$update_root/linux/arm64"
+
+          linux_x64_appimage="$update_root/linux/x64/uniccmeet-${version}-linux-x86_64.AppImage"
+          linux_x64_deb="$update_root/linux/x64/uniccmeet-${version}-linux-amd64.deb"
+          linux_x64_rpm="$update_root/linux/x64/uniccmeet-${version}-linux-x86_64.rpm"
+          linux_arm64_rpm="$update_root/linux/arm64/uniccmeet-${version}-linux-aarch64.rpm"
+          linux_x64_update="$update_root/linux/x64/latest-linux.yml"
+
+          if [[ -f "$linux_x64_appimage" ]]; then
+            mv \
+              "$linux_x64_appimage" \
+              "$update_root/linux/x64/uniccmeet-${version}-linux-x64.AppImage"
+          fi
+          if [[ -f "$linux_x64_deb" ]]; then
+            mv \
+              "$linux_x64_deb" \
+              "$update_root/linux/x64/uniccmeet-${version}-linux-x64.deb"
+          fi
+          if [[ -f "$linux_x64_rpm" ]]; then
+            mv \
+              "$linux_x64_rpm" \
+              "$update_root/linux/x64/uniccmeet-${version}-linux-x64.rpm"
+          fi
+          if [[ -f "$linux_arm64_rpm" ]]; then
+            mv \
+              "$linux_arm64_rpm" \
+              "$update_root/linux/arm64/uniccmeet-${version}-linux-arm64.rpm"
+          fi
+          if [[ -f "$linux_x64_update" ]]; then
+            sed -i \
+              "s/uniccmeet-${version}-linux-x86_64\\.AppImage/uniccmeet-${version}-linux-x64.AppImage/g" \
+              "$linux_x64_update"
+          fi
+
+          require_file() {
+            if [[ ! -f "$1" ]]; then
+              echo "::error file=$1::Expected update artifact is missing: $1"
+              return 1
+            fi
+          }
+
+          require_file "$update_root/win32/x64/latest.yml"
+          require_file "$update_root/win32/x64/uniccmeet-${version}-windows-x64.exe"
+          require_file "$update_root/win32/x64/uniccmeet-${version}-windows-x64.exe.blockmap"
+
+          for arch in x64 arm64; do
+            require_file "$update_root/darwin/$arch/latest-mac.yml"
+            require_file "$update_root/darwin/$arch/uniccmeet-${version}-macos-$arch.zip"
+            require_file "$update_root/darwin/$arch/uniccmeet-${version}-macos-$arch.dmg"
+
+            if [[ "$arch" == "arm64" ]]; then
+              require_file "$update_root/linux/$arch/latest-linux-arm64.yml"
+            else
+              require_file "$update_root/linux/$arch/latest-linux.yml"
+            fi
+            require_file "$update_root/linux/$arch/uniccmeet-${version}-linux-$arch.AppImage"
+            require_file "$update_root/linux/$arch/uniccmeet-${version}-linux-$arch.deb"
+            require_file "$update_root/linux/$arch/uniccmeet-${version}-linux-$arch.rpm"
+          done
+
+          echo "Bundled update files:"
+          find artifact-root -type f | sort
+
+      - name: Upload update directory
+        uses: actions/upload-artifact@v7
+        with:
+          name: downloads-updates-${{ steps.package_version.outputs.version }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+          path: artifact-root/
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - package
+      - bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: uniccmeet-*
+          path: artifacts
+
+      - name: Create or update release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -d '' release_files < <(
+            find artifacts -type f \( \
+              -name '*.exe' -o \
+              -name '*.dmg' -o \
+              -name '*.AppImage' -o \
+              -name '*.deb' -o \
+              -name '*.rpm' \
+            \) -print0
+          )
+
+          if (( ${#release_files[@]} == 0 )); then
+            echo "No desktop installers were downloaded."
+            exit 1
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${release_files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${release_files[@]}" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
