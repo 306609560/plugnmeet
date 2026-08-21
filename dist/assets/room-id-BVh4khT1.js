@@ -1,0 +1,1 @@
+var e=/^\d{3}-\d{3}-\d{3}$/;function t(e){let t=e.replace(/[^\d-]/g,``),n=t.replace(/\D/g,``).slice(0,9),r=[n.slice(0,3),n.slice(3,6),n.slice(6,9)].filter(Boolean).join(`-`);return t.endsWith(`-`)&&(n.length===3||n.length===6)?`${r}-`:r}function n(t){return e.test(t.trim())}export{n,t};

@@ -1,0 +1,1 @@
+var e=`[A-Za-z0-9][A-Za-z0-9._\\-]{1,62}[A-Za-z0-9]`,t=RegExp(`^${e}$`);function n(e){let n=e.trim();return t.test(n)&&!n.includes(`..`)}export{n,e as t};

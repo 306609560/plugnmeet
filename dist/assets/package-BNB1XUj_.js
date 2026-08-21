@@ -1,0 +1,1 @@
+var e=[{code:`en`,label:`English`},{code:`zh-CN`,label:`简体中文`}],t=`0.1.9`;export{e as n,t};
