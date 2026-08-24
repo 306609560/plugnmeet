@@ -1,1 +1,0 @@
-var e=`/assets/favicon-Colfio1B.png`;export{e as t};

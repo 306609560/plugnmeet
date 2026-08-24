@@ -1,9 +1,10 @@
-const DEFAULT_SERVER_URL = 'https://192.168.56.154';
+const DEFAULT_SERVER_URL = 'http://192.168.56.154';
+const PORTAL_PUBLIC_PATH = '/ccti/earth/meet';
+const API_PUBLIC_PATH = `${PORTAL_PUBLIC_PATH}/api`;
+const CLIENT_PUBLIC_PATH = `${PORTAL_PUBLIC_PATH}/room`;
+const PNM_PUBLIC_PATH = `${PORTAL_PUBLIC_PATH}/plugnmeet`;
 
-function normalizeServerUrl(
-  value,
-  { name = 'serverUrl', requireHttps = false } = {},
-) {
+function normalizeServerUrl(value, { name = 'serverUrl' } = {}) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`${name} is required`);
   }
@@ -18,9 +19,6 @@ function normalizeServerUrl(
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error(`${name} must use http or https`);
   }
-  if (requireHttps && parsed.protocol !== 'https:') {
-    throw new Error(`${name} must use https for release builds`);
-  }
   if (parsed.pathname !== '/' || parsed.search || parsed.hash) {
     throw new Error(
       `${name} must be an origin without a path, query, or fragment`,
@@ -31,7 +29,10 @@ function normalizeServerUrl(
 }
 
 function getUpdateBaseUrl(serverUrl) {
-  return new URL('/downloads/updates/', normalizeServerUrl(serverUrl)).toString();
+  return new URL(
+    `${API_PUBLIC_PATH}/downloads/updates/`,
+    normalizeServerUrl(serverUrl),
+  ).toString();
 }
 
 function getDesktopConfigServerUrl(config) {
@@ -43,7 +44,11 @@ function getDesktopConfigServerUrl(config) {
 }
 
 module.exports = {
+  API_PUBLIC_PATH,
+  CLIENT_PUBLIC_PATH,
   DEFAULT_SERVER_URL,
+  PNM_PUBLIC_PATH,
+  PORTAL_PUBLIC_PATH,
   getDesktopConfigServerUrl,
   getUpdateBaseUrl,
   normalizeServerUrl,

@@ -17,7 +17,11 @@ const https = require('node:https');
 const net = require('node:net');
 const path = require('node:path');
 const {
+  API_PUBLIC_PATH,
+  CLIENT_PUBLIC_PATH,
   DEFAULT_SERVER_URL,
+  PNM_PUBLIC_PATH,
+  PORTAL_PUBLIC_PATH,
   getDesktopConfigServerUrl,
   getUpdateBaseUrl,
   normalizeServerUrl,
@@ -64,7 +68,6 @@ const updateCheckIntervalMs = 6 * 60 * 60 * 1000;
 
 let server;
 let mainWindow;
-let instantMessagingWindow;
 let updateCheckTimer;
 let updateDialogOpen = false;
 let updateInstallRequested = false;
@@ -1198,17 +1201,6 @@ async function createWindow() {
   mainWindow.setTitle(appName);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    const targetUrl = new URL(url);
-    const localAppOrigin = `http://127.0.0.1:${port}`;
-
-    if (
-      targetUrl.origin === localAppOrigin &&
-      ['/api/auth/sso/start', '/im/index.html'].includes(targetUrl.pathname)
-    ) {
-      openInstantMessagingWindow(url, windowIconPath);
-      return { action: 'deny' };
-    }
-
     shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -1223,58 +1215,12 @@ async function createWindow() {
 
   mainWindow.on('closed', () => {
     stopScreenAnnotationOverlay();
-    if (instantMessagingWindow && !instantMessagingWindow.isDestroyed()) {
-      instantMessagingWindow.close();
-    }
     mainWindow = null;
   });
 
-  await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
-}
-
-function openInstantMessagingWindow(url, windowIconPath) {
-  if (instantMessagingWindow && !instantMessagingWindow.isDestroyed()) {
-    if (instantMessagingWindow.isMinimized()) {
-      instantMessagingWindow.restore();
-    }
-    instantMessagingWindow.focus();
-    return;
-  }
-
-  instantMessagingWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 900,
-    minHeight: 600,
-    title: '即时通讯',
-    icon: windowIconPath,
-    autoHideMenuBar: true,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  instantMessagingWindow.setMenuBarVisibility(false);
-  instantMessagingWindow.removeMenu();
-
-  if (process.platform === 'linux') {
-    instantMessagingWindow.setIcon(windowIconPath);
-  }
-
-  instantMessagingWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
-    shell.openExternal(targetUrl);
-    return { action: 'deny' };
-  });
-
-  instantMessagingWindow.on('closed', () => {
-    instantMessagingWindow = null;
-  });
-
-  instantMessagingWindow.loadURL(url).catch((error) => {
-    log.error('[instant-messaging] failed to load:', error);
-  });
+  await mainWindow.loadURL(
+    `http://127.0.0.1:${port}${PORTAL_PUBLIC_PATH}/`,
+  );
 }
 
 async function startLocalServer() {
@@ -1289,11 +1235,7 @@ async function startLocalServer() {
       return;
     }
 
-    if (
-      req.url.startsWith('/api/') ||
-      req.url.startsWith('/uploads/') ||
-      req.url.startsWith('/downloads/')
-    ) {
+    if (req.url.startsWith(`${API_PUBLIC_PATH}/`)) {
       proxyRequest(req, res);
       return;
     }
@@ -1369,7 +1311,21 @@ function serveStatic(root, req, res) {
     return;
   }
 
-  const normalizedPath = path.normalize(pathname).replace(/^(\.\.[/\\])+/, '');
+  const isMeetingPath =
+    pathname === CLIENT_PUBLIC_PATH ||
+    pathname.startsWith(`${CLIENT_PUBLIC_PATH}/`);
+  let staticPathname = pathname;
+  if (isMeetingPath) {
+    staticPathname = `/meet${pathname.slice(CLIENT_PUBLIC_PATH.length)}`;
+  } else if (pathname === PORTAL_PUBLIC_PATH) {
+    staticPathname = '/';
+  } else if (pathname.startsWith(`${PORTAL_PUBLIC_PATH}/`)) {
+    staticPathname = pathname.slice(PORTAL_PUBLIC_PATH.length);
+  }
+
+  const normalizedPath = path
+    .normalize(staticPathname)
+    .replace(/^(\.\.[/\\])+/, '');
   let filePath = path.join(root, normalizedPath);
 
   if (!filePath.startsWith(root)) {
@@ -1378,7 +1334,7 @@ function serveStatic(root, req, res) {
     return;
   }
 
-  if (pathname === '/meet' || pathname.startsWith('/meet/')) {
+  if (isMeetingPath) {
     const maybeFile = filePath;
 
     filePath =
@@ -1397,12 +1353,30 @@ function serveStatic(root, req, res) {
       return;
     }
 
+    const responseData =
+      staticPathname === '/meet/assets/config.js'
+        ? configureMeetingClient(data)
+        : data;
+
     res.writeHead(200, {
       'Content-Type': contentType(filePath),
     });
 
-    res.end(data);
+    res.end(responseData);
   });
+}
+
+function configureMeetingClient(data) {
+  const publicServerUrl = `${serverUrl}${PNM_PUBLIC_PATH}`;
+  return Buffer.from(
+    data
+      .toString('utf8')
+      .replace(
+        /serverUrl:\s*(['"])[^'"]*\1/,
+        `serverUrl: ${JSON.stringify(publicServerUrl)}`,
+      ),
+    'utf8',
+  );
 }
 
 function proxyRequest(req, res) {

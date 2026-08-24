@@ -25,7 +25,6 @@ if (missing.length > 0) {
 
 normalizeServerUrl(process.env.UNICCMEET_SERVER_URL || DEFAULT_SERVER_URL, {
   name: 'UNICCMEET_SERVER_URL',
-  requireHttps: true,
 });
 
 console.log(`Release environment is valid for ${process.platform}/${process.arch}`);
