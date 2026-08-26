@@ -1,4 +1,4 @@
-const DEFAULT_SERVER_URL = 'http://ai-test.unicom.local/ccti/earth/meet';
+const DEFAULT_SERVER_URL = 'http://ai-test.unicom.local';
 const PORTAL_PUBLIC_PATH = '/ccti/earth/meet';
 const API_PUBLIC_PATH = `${PORTAL_PUBLIC_PATH}/api`;
 const CLIENT_PUBLIC_PATH = `${PORTAL_PUBLIC_PATH}/room`;
