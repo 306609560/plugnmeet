@@ -1,5 +1,5 @@
 window.plugNmeetConfig = {
-  serverUrl: 'http://192.168.56.154/ccti/earth/meet/plugnmeet',
+  serverUrl: 'http://ai-test.unicom.local/ccti/earth/meet/plugnmeet',
   enableAdaptiveStream: true,
   enableDynacast: true,
   enableSimulcast: true,
