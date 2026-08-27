@@ -54,7 +54,7 @@
     try {
       const res = await callLtiApi('/room/join', {});
       if (res.status) {
-        let url = `${window.plugNmeetConfig.serverUrl}/?access_token=${res.token}`;
+        let url = `${window.uniccmeetConfig.serverUrl}/?access_token=${res.token}`;
         if (window.DESIGN_CUSTOMIZATION) {
           url += `&custom_design=${encodeURIComponent(window.DESIGN_CUSTOMIZATION)}`;
         }
@@ -126,7 +126,7 @@
         record_id: recordId,
       });
       if (res.status) {
-        const url = `${window.plugNmeetConfig.serverUrl}/download/recording/${res.token}`;
+        const url = `${window.uniccmeetConfig.serverUrl}/download/recording/${res.token}`;
         window.open(url, '_blank');
       } else {
         showError(res.msg);
@@ -154,7 +154,7 @@
   };
 
   const callLtiApi = async (path, body) => {
-    const url = `${window.plugNmeetConfig.serverUrl}/lti/v1/api${path}`;
+    const url = `${window.uniccmeetConfig.serverUrl}/lti/v1/api${path}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: {
