@@ -1,5 +1,5 @@
 window.uniccmeetConfig = {
-  serverUrl: 'http://ai-test.unicom.local/ccti/earth/meet/uniccmeet',
+  serverUrl: 'http://ai-test.unicom.local/ccti/earth/meet/room',
   enableAdaptiveStream: true,
   enableDynacast: true,
   enableSimulcast: true,
