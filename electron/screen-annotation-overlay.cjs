@@ -1,6 +1,6 @@
 const path = require('path');
 const { spawn } = require('child_process');
-const { BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
 const MAX_REQUEST_SIZE = 8 * 1024 * 1024;
 const SUPPORTED_PLATFORMS = new Set(['win32', 'darwin']);
@@ -814,7 +814,7 @@ async function createOverlayWindow() {
     movable: false,
     resizable: false,
     show: false,
-    skipTaskbar: true,
+    skipTaskbar: process.platform !== 'darwin',
     transparent: true,
     type: process.platform === 'darwin' ? 'panel' : undefined,
     webPreferences: {
@@ -825,6 +825,11 @@ async function createOverlayWindow() {
       sandbox: true,
     },
   });
+
+  if (process.platform === 'darwin') {
+    app.setActivationPolicy('regular');
+    await app.dock.show();
+  }
 
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
   overlayWindow.setContentProtection(true);

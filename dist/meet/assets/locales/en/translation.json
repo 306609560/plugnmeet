@@ -186,6 +186,8 @@
       "allow-audio-notification": "Enable Sound Notifications",
       "application": "Application",
       "language": "Language",
+      "preferred-microphone": "Preferred Microphone",
+      "preferred-camera": "Preferred Camera",
       "video-quality": "Video Quality",
       "high": "High",
       "medium": "Medium",
